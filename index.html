@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calcul Calorie - Tophe</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+    <style>
+        .nutrient-bar {
+            height: 20px;
+            border-radius: 10px;
+            margin-bottom: 5px;
+        }
+        .micronutrient-bar {
+            height: 12px;
+            border-radius: 6px;
+            margin-bottom: 3px;
+        }
+        .protein { background-color: #4299e1; }
+        .carbs { background-color: #48bb78; }
+        .fat { background-color: #ed8936; }
+        
+        .meal-tab.active {
+            background-color: #4299e1;
+            color: white;
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            animation: fadeIn 0.3s;
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from {opacity: 0}
+            to {opacity: 1}
+        }
+        
+        @keyframes slideIn {
+            from {transform: translateY(-50px); opacity: 0;}
+            to {transform: translateY(0); opacity: 1;}
+        }
+        
+        @media print {
+            body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+        }
+        
+        .print-only {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Top Navigation Bar -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl font-bold">Calculateur de Calories</h1>
+                <div class="space-x-2">
+                    <button id="export-pdf-btn" class="px-3 py-1 bg-blue-500 hover:bg-blue-400 rounded-md text-sm font-medium transition-colors duration-200">
+                        <i class="fas fa-file-pdf mr-1"></i> Exporter en PDF
+                    </button>
+                    <button id="add-to-home-btn" class="px-3 py-1 bg-blue-500 hover:bg-blue-400 rounded-md text-sm font-medium transition-colors duration-200">
+                        <i class="fas fa-utensils mr-1"></i><i class="fas fa-calculator mr-1"></i> Ajouter à l'accueil
+                    </button>
+                    <button id="info-btn" class="px-3 py-1 bg-blue-500 hover:bg-blue-400 rounded-md text-sm font-medium transition-colors duration-200">
+                        <i class="fas fa-info-circle mr-1"></i> Information
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 py-8" id="content-to-export">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Calculateur de Calories Journalier</h1>
+            <p class="text-gray-600 mt-2">Composez et calculez vos repas pour toute la journée</p>
+        </header>
+
+        <!-- Onglets des repas -->
+        <div class="flex flex-wrap mb-6 overflow-x-auto no-print" id="meal-tabs">
+            <button class="meal-tab active px-4 py-2 mr-2 mb-2 rounded-lg text-sm font-medium" data-meal="breakfast">
+                <i class="fas fa-coffee mr-1"></i> Petit-déjeuner
+            </button>
+            <button class="meal-tab px-4 py-2 mr-2 mb-2 rounded-lg text-sm font-medium bg-gray-200" data-meal="lunch">
+                <i class="fas fa-utensils mr-1"></i> Déjeuner
+            </button>
+            <button class="meal-tab px-4 py-2 mr-2 mb-2 rounded-lg text-sm font-medium bg-gray-200" data-meal="dinner">
+                <i class="fas fa-utensils mr-1"></i> Dîner
+            </button>
+            <button class="meal-tab px-4 py-2 mr-2 mb-2 rounded-lg text-sm font-medium bg-gray-200" data-meal="snack">
+                <i class="fas fa-apple-alt mr-1"></i> Collation
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Section de sélection d'aliments -->
+            <div class="bg-white rounded-lg shadow p-6 no-print">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800" id="current-meal-title">Ajouter un aliment au petit-déjeuner</h2>
+                
+                <div class="mb-4">
+                    <label for="food-category" class="block text-gray-700 mb-2">Catégorie</label>
+                    <select id="food-category" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Sélectionnez une catégorie</option>
+                        <option value="legumes">Légumes</option>
+                        <option value="fruits">Fruits</option>
+                        <option value="viandes">Viandes</option>
+                        <option value="poissons">Poissons</option>
+                        <option value="produits_laitiers">Produits Laitiers</option>
+                        <option value="cereales">Céréales et Pains</option>
+                        <option value="petit_dejeuner">Autres (Petit Déjeuner)</option>
+                        <option value="boissons">Boissons</option>
+                    </select>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="food-item" class="block text-gray-700 mb-2">Aliment</label>
+                    <select id="food-item" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
+                        <option value="">Sélectionnez d'abord une catégorie</option>
+                    </select>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="food-quantity" class="block text-gray-700 mb-2">Quantité (g)</label>
+                    <input type="number" id="food-quantity" min="1" value="100" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <button id="add-food-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    Ajouter à mon repas
+                </button>
+                
+                <div id="food-details" class="mt-6">
+                    <h3 class="text-lg font-medium mb-3 text-gray-800">Détails nutritionnels</h3>
+                    <div id="food-details-content" class="text-gray-600">
+                        Sélectionnez un aliment pour voir ses détails nutritionnels
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section du repas actuel -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800" id="current-meal-display">Mon petit-déjeuner</h2>
+                <div id="meal-list" class="mb-6">
+                    <p id="empty-meal-message" class="text-gray-500">Aucun aliment sélectionné</p>
+                    <ul id="meal-items" class="divide-y divide-gray-200"></ul>
+                </div>
+                
+                <div id="meal-summary" class="mt-6">
+                    <h3 class="text-lg font-medium mb-3 text-gray-800">Résumé nutritionnel du repas</h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Calories totales</h4>
+                            <p id="total-calories" class="text-2xl font-bold text-gray-900">0 kcal</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Poids total</h4>
+                            <p id="total-weight" class="text-2xl font-bold text-gray-900">0 g</p>
+                        </div>
+                    </div>
+                    
+                    <h4 class="text-md font-medium mb-2 text-gray-800">Macronutriments</h4>
+                    <div id="macros-container" class="mb-6">
+                        <div class="mb-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium">Protéines</span>
+                                <span id="total-protein" class="text-sm">0g (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="protein-bar" class="protein h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium">Glucides</span>
+                                <span id="total-carbs" class="text-sm">0g (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="carbs-bar" class="carbs h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium">Lipides</span>
+                                <span id="total-fat" class="text-sm">0g (0%)</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="fat-bar" class="fat h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h4 class="text-md font-medium mb-2 text-gray-800">Répartition calorique</h4>
+                    <div class="w-full h-64 mb-6">
+                        <canvas id="macro-chart"></canvas>
+                    </div>
+                    
+                    <h4 class="text-md font-medium mb-2 text-gray-800">Micronutriments</h4>
+                    <div id="micronutrients-container" class="mb-4">
+                        <p id="empty-micro-message" class="text-gray-500">Ajoutez des aliments pour voir les micronutriments</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Résumé quotidien -->
+        <div class="mt-12 bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Résumé journalier</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Calories totales journée</h4>
+                    <p id="daily-calories" class="text-2xl font-bold text-gray-900">0 kcal</p>
+                </div>
+                <div class="bg-blue-100 p-4 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Protéines</h4>
+                    <p id="daily-protein" class="text-2xl font-bold text-gray-900">0 g</p>
+                </div>
+                <div class="bg-green-100 p-4 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Glucides</h4>
+                    <p id="daily-carbs" class="text-2xl font-bold text-gray-900">0 g</p>
+                </div>
+                <div class="bg-orange-100 p-4 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Lipides</h4>
+                    <p id="daily-fat" class="text-2xl font-bold text-gray-900">0 g</p>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h4 class="text-md font-medium mb-4 text-gray-800">Répartition par repas</h4>
+                    <div class="w-full h-64 mb-6">
+                        <canvas id="meals-chart"></canvas>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-md font-medium mb-4 text-gray-800">Répartition des macronutriments</h4>
+                    <div class="w-full h-64 mb-6">
+                        <canvas id="daily-macro-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-6">
+                <h4 class="text-md font-medium mb-2 text-gray-800">Détail par repas</h4>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white">
+                        <thead>
+                            <tr>
+                                <th class="py-2 px-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Repas</th>
+                                <th class="py-2 px-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Calories</th>
+                                <th class="py-2 px-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Protéines</th>
+                                <th class="py-2 px-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Glucides</th>
+                                <th class="py-2 px-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Lipides</th>
+                            </tr>
+                        </thead>
+                        <tbody id="meals-summary">
+                            <tr>
+                                <td class="py-2 px-4 border-b border-gray-200">Petit-déjeuner</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="breakfast-calories">0 kcal</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="breakfast-protein">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="breakfast-carbs">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="breakfast-fat">0 g</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 px-4 border-b border-gray-200">Déjeuner</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="lunch-calories">0 kcal</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="lunch-protein">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="lunch-carbs">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="lunch-fat">0 g</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 px-4 border-b border-gray-200">Dîner</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="dinner-calories">0 kcal</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="dinner-protein">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="dinner-carbs">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="dinner-fat">0 g</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2 px-4 border-b border-gray-200">Collation</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="snack-calories">0 kcal</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="snack-protein">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="snack-carbs">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="snack-fat">0 g</td>
+                            </tr>
+                            <tr class="bg-gray-50 font-semibold">
+                                <td class="py-2 px-4 border-b border-gray-200">TOTAL</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="total-daily-calories">0 kcal</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="total-daily-protein">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="total-daily-carbs">0 g</td>
+                                <td class="py-2 px-4 border-b border-gray-200" id="total-daily-fat">0 g</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Bouton de réinitialisation -->
+            <div class="mt-8 text-center no-print">
+                <button id="reset-all-btn" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-md transition duration-200">
+                    <i class="fas fa-trash-alt mr-2"></i>Réinitialiser tous les repas
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal d'information -->
+    <div id="info-modal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Information</h3>
+                <span id="close-modal" class="text-gray-500 text-xl cursor-pointer hover:text-gray-700">&times;</span>
+            </div>
+            <div class="mb-4">
+                <p class="mb-3">Application développée par Tophe - Avril 2025</p>
+                <p class="mb-3">Utilisez cette page pour obtenir une estimation rapide des calories de vos repas.</p>
+                <p class="font-semibold">Rappel important :</p>
+                <p>Ces informations sont indicatives et ne remplacent pas les conseils personnalisés d'un professionnel de santé (diététicien(ne), médecin). Consultez-les pour un avis adapté à votre situation.</p>
+            </div>
+            <div class="text-right">
+                <button id="close-modal-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-4 rounded-md transition duration-200">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de modification de quantité -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" id="edit-modal-title">Modifier la quantité</h3>
+                <span id="close-edit-modal" class="text-gray-500 text-xl cursor-pointer hover:text-gray-700">&times;</span>
+            </div>
+            <div class="mb-6">
+                <label for="edit-quantity" class="block text-gray-700 mb-2">Nouvelle quantité (g)</label>
+                <input type="number" id="edit-quantity" min="1" value="100" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button id="cancel-edit-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-1.5 px-4 rounded-md transition duration-200">
+                    Annuler
+                </button>
+                <button id="confirm-edit-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-4 rounded-md transition duration-200">
+                    Confirmer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenu spécifique pour PDF -->
+    <div id="pdf-content" class="print-only">
+        <h1 class="text-2xl font-bold mb-4">Mon plan alimentaire journalier</h1>
+        <p class="mb-6">Date: <span id="pdf-date"></span></p>
+        <div id="pdf-meals"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script>
+        // Base de données des aliments avec leurs valeurs nutritionnelles
+        const foodDatabase = {
+            legumes: {
+                "Carotte": {
+                    calories: 41,
+                    protein: 0.9,
+                    carbs: 9.6,
+                    fat: 0.2,
+                    micro: {
+                        "Vitamine A": { value: 835, unit: "µg" },
+                        "Vitamine C": { value: 5.9, unit: "mg" },
+                        "Potassium": { value: 320, unit: "mg" },
+                        "Calcium": { value: 33, unit: "mg" },
+                        "Fer": { value: 0.3, unit: "mg" }
+                    }
+                },
+                "Brocoli": {
+                    calories: 34,
+                    protein: 2.8,
+                    carbs: 6.6,
+                    fat: 0.4,
+                    micro: {
+                        "Vitamine C": { value: 89.2, unit: "mg" },
+                        "Vitamine K": { value: 101.6, unit: "µg" },
+                        "Folate": { value: 63, unit: "µg" },
+                        "Potassium": { value: 316, unit: "mg" },
+                        "Magnésium": { value: 21, unit: "mg" }
+                    }
+                },
+                "Épinard": {
+                    calories: 23,
+                    protein: 2.9,
+                    carbs: 3.6,
+                    fat: 0.4,
+                    micro: {
+                        "Vitamine A": { value: 469, unit: "µg" },
+                        "Vitamine C": { value: 28, unit: "mg" },
+                        "Vitamine K": { value: 483, unit: "µg" },
+                        "Calcium": { value: 99, unit: "mg" },
+                        "Fer": { value: 2.7, unit: "mg" }
+                    }
+                },
+                "Tomate": {
+                    calories: 18,
+                    protein: 0.9,
+                    carbs: 3.9,
+                    fat: 0.2,
+                    micro: {
+                        "Vitamine C": { value: 13.7, unit: "mg" },
+                        "Potassium": { value: 237, unit: "mg" },
+                        "Vitamine A": { value: 42, unit: "µg" },
+                        "Vitamine K": { value: 7.9, unit: "µg" },
+                        "Lycopène": { value: 2573, unit: "µg" }
+                    }
+                },
+                "Pomme de terre": {
+                    calories: 77,
+                    protein: 2.0,
+                    carbs: 17.5,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine C": { value: 19.7, unit: "mg" },
+                        "Potassium": { value: 421, unit: "mg" },
+                        "Vitamine B6": { value: 0.3, unit: "mg" },
+                        "Magnésium": { value: 23, unit: "mg" },
+                        "Niacine": { value: 1.1, unit: "mg" }
+                    }
+                },
+                "Poivron rouge": {
+                    calories: 31,
+                    protein: 1.0,
+                    carbs: 6.0,
+                    fat: 0.3,
+                    micro: {
+                        "Vitamine C": { value: 128, unit: "mg" },
+                        "Vitamine A": { value: 157, unit: "µg" },
+                        "Vitamine B6": { value: 0.3, unit: "mg" },
+                        "Folate": { value: 21, unit: "µg" },
+                        "Potassium": { value: 211, unit: "mg" }
+                    }
+                },
+                "Courgette": {
+                    calories: 17,
+                    protein: 1.2,
+                    carbs: 3.1,
+                    fat: 0.3,
+                    micro: {
+                        "Vitamine C": { value: 17.9, unit: "mg" },
+                        "Potassium": { value: 261, unit: "mg" },
+                        "Folate": { value: 24, unit: "µg" },
+                        "Magnésium": { value: 18, unit: "mg" },
+                        "Vitamine B6": { value: 0.2, unit: "mg" }
+                    }
+                },
+                "Aubergine": {
+                    calories: 25,
+                    protein: 1.0,
+                    carbs: 6.0,
+                    fat: 0.2,
+                    micro: {
+                        "Potassium": { value: 229, unit: "mg" },
+                        "Folate": { value: 22, unit: "µg" },
+                        "Vitamine K": { value: 3.5, unit: "µg" },
+                        "Magnésium": { value: 14, unit: "mg" },
+                        "Manganèse": { value: 0.3, unit: "mg" }
+                    }
+                },
+                "Champignons": {
+                    calories: 22,
+                    protein: 3.1,
+                    carbs: 3.3,
+                    fat: 0.3,
+                    micro: {
+                        "Niacine": { value: 3.6, unit: "mg" },
+                        "Riboflavine": { value: 0.4, unit: "mg" },
+                        "Cuivre": { value: 0.3, unit: "mg" },
+                        "Sélénium": { value: 9.3, unit: "µg" },
+                        "Potassium": { value: 318, unit: "mg" }
+                    }
+                },
+                "Concombre": {
+                    calories: 15,
+                    protein: 0.7,
+                    carbs: 3.6,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine K": { value: 16.4, unit: "µg" },
+                        "Potassium": { value: 147, unit: "mg" },
+                        "Vitamine C": { value: 2.8, unit: "mg" },
+                        "Magnésium": { value: 13, unit: "mg" },
+                        "Manganèse": { value: 0.1, unit: "mg" }
+                    }
+                },
+                "Haricots verts": {
+                    calories: 31,
+                    protein: 1.8,
+                    carbs: 7.0,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine C": { value: 12.2, unit: "mg" },
+                        "Vitamine K": { value: 48, unit: "µg" },
+                        "Folate": { value: 33, unit: "µg" },
+                        "Potassium": { value: 209, unit: "mg" },
+                        "Calcium": { value: 37, unit: "mg" }
+                    }
+                }
+            },
+            fruits: {
+                "Pomme": {
+                    calories: 52,
+                    protein: 0.3,
+                    carbs: 13.8,
+                    fat: 0.2,
+                    micro: {
+                        "Vitamine C": { value: 4.6, unit: "mg" },
+                        "Potassium": { value: 107, unit: "mg" },
+                        "Fibres": { value: 2.4, unit: "g" },
+                        "Vitamine K": { value: 2.2, unit: "µg" },
+                        "Manganèse": { value: 0.04, unit: "mg" }
+                    }
+                },
+                "Banane": {
+                    calories: 89,
+                    protein: 1.1,
+                    carbs: 22.8,
+                    fat: 0.3,
+                    micro: {
+                        "Vitamine C": { value: 8.7, unit: "mg" },
+                        "Potassium": { value: 358, unit: "mg" },
+                        "Vitamine B6": { value: 0.4, unit: "mg" },
+                        "Magnésium": { value: 27, unit: "mg" },
+                        "Folate": { value: 20, unit: "µg" }
+                    }
+                },
+                "Orange": {
+                    calories: 47,
+                    protein: 0.9,
+                    carbs: 11.8,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine C": { value: 53.2, unit: "mg" },
+                        "Folate": { value: 30, unit: "µg" },
+                        "Potassium": { value: 181, unit: "mg" },
+                        "Thiamine": { value: 0.1, unit: "mg" },
+                        "Calcium": { value: 40, unit: "mg" }
+                    }
+                },
+                "Fraise": {
+                    calories: 32,
+                    protein: 0.7,
+                    carbs: 7.7,
+                    fat: 0.3,
+                    micro: {
+                        "Vitamine C": { value: 58.8, unit: "mg" },
+                        "Manganèse": { value: 0.6, unit: "mg" },
+                        "Folate": { value: 24, unit: "µg" },
+                        "Potassium": { value: 153, unit: "mg" },
+                        "Magnésium": { value: 13, unit: "mg" }
+                    }
+                },
+                "Myrtille": {
+                    calories: 57,
+                    protein: 0.7,
+                    carbs: 14.5,
+                    fat: 0.3,
+                    micro: {
+                        "Vitamine C": { value: 9.7, unit: "mg" },
+                        "Vitamine K": { value: 19.3, unit: "µg" },
+                        "Manganèse": { value: 0.3, unit: "mg" },
+                        "Potassium": { value: 77, unit: "mg" },
+                        "Antioxydants": { value: 9621, unit: "ORAC" }
+                    }
+                },
+                "Poire": {
+                    calories: 57,
+                    protein: 0.4,
+                    carbs: 15.2,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine C": { value: 4.3, unit: "mg" },
+                        "Vitamine K": { value: 4.4, unit: "µg" },
+                        "Potassium": { value: 116, unit: "mg" },
+                        "Cuivre": { value: 0.1, unit: "mg" },
+                        "Fibres": { value: 3.1, unit: "g" }
+                    }
+                },
+                "Kiwi": {
+                    calories: 61,
+                    protein: 1.1,
+                    carbs: 14.7,
+                    fat: 0.5,
+                    micro: {
+                        "Vitamine C": { value: 92.7, unit: "mg" },
+                        "Vitamine K": { value: 40.3, unit: "µg" },
+                        "Potassium": { value: 312, unit: "mg" },
+                        "Vitamine E": { value: 1.5, unit: "mg" },
+                        "Folate": { value: 25, unit: "µg" }
+                    }
+                },
+                "Pêche": {
+                    calories: 39,
+                    protein: 0.9,
+                    carbs: 9.5,
+                    fat: 0.3,
+                    micro: {
+                        "Vitamine C": { value: 6.6, unit: "mg" },
+                        "Vitamine A": { value: 16, unit: "µg" },
+                        "Potassium": { value: 190, unit: "mg" },
+                        "Niacine": { value: 0.8, unit: "mg" },
+                        "Fibres": { value: 1.5, unit: "g" }
+                    }
+                }
+            },
+            viandes: {
+                "Poulet (blanc)": {
+                    calories: 165,
+                    protein: 31.0,
+                    carbs: 0.0,
+                    fat: 3.6,
+                    micro: {
+                        "Niacine": { value: 13.7, unit: "mg" },
+                        "Vitamine B6": { value: 0.6, unit: "mg" },
+                        "Phosphore": { value: 228, unit: "mg" },
+                        "Sélénium": { value: 27.6, unit: "µg" },
+                        "Zinc": { value: 1.0, unit: "mg" }
+                    }
+                },
+                "Bœuf (steak)": {
+                    calories: 271,
+                    protein: 26.0,
+                    carbs: 0.0,
+                    fat: 18.0,
+                    micro: {
+                        "Fer": { value: 2.6, unit: "mg" },
+                        "Zinc": { value: 5.4, unit: "mg" },
+                        "Vitamine B12": { value: 2.6, unit: "µg" },
+                        "Niacine": { value: 6.2, unit: "mg" },
+                        "Sélénium": { value: 33.1, unit: "µg" }
+                    }
+                },
+                "Porc (côtelette)": {
+                    calories: 231,
+                    protein: 25.0,
+                    carbs: 0.0,
+                    fat: 14.0,
+                    micro: {
+                        "Thiamine": { value: 0.9, unit: "mg" },
+                        "Niacine": { value: 6.3, unit: "mg" },
+                        "Vitamine B6": { value: 0.4, unit: "mg" },
+                        "Phosphore": { value: 213, unit: "mg" },
+                        "Zinc": { value: 2.4, unit: "mg" }
+                    }
+                },
+                "Agneau (côtelette)": {
+                    calories: 294,
+                    protein: 24.9,
+                    carbs: 0.0,
+                    fat: 21.0,
+                    micro: {
+                        "Vitamine B12": { value: 2.3, unit: "µg" },
+                        "Niacine": { value: 7.9, unit: "mg" },
+                        "Zinc": { value: 4.2, unit: "mg" },
+                        "Fer": { value: 1.9, unit: "mg" },
+                        "Sélénium": { value: 24.5, unit: "µg" }
+                    }
+                },
+                "Dinde (blanc)": {
+                    calories: 135,
+                    protein: 29.9,
+                    carbs: 0.0,
+                    fat: 1.0,
+                    micro: {
+                        "Niacine": { value: 7.1, unit: "mg" },
+                        "Vitamine B6": { value: 0.6, unit: "mg" },
+                        "Phosphore": { value: 229, unit: "mg" },
+                        "Sélénium": { value: 30.7, unit: "µg" },
+                        "Zinc": { value: 1.3, unit: "mg" }
+                    }
+                },
+                "Lapin": {
+                    calories: 173,
+                    protein: 33.0,
+                    carbs: 0.0,
+                    fat: 3.5,
+                    micro: {
+                        "Vitamine B12": { value: 6.8, unit: "µg" },
+                        "Niacine": { value: 12.8, unit: "mg" },
+                        "Potassium": { value: 380, unit: "mg" },
+                        "Phosphore": { value: 240, unit: "mg" },
+                        "Sélénium": { value: 23.7, unit: "µg" }
+                    }
+                },
+                "Veau (escalope)": {
+                    calories: 172,
+                    protein: 30.9,
+                    carbs: 0.0,
+                    fat: 5.1,
+                    micro: {
+                        "Vitamine B12": { value: 1.3, unit: "µg" },
+                        "Zinc": { value: 3.1, unit: "mg" },
+                        "Fer": { value: 1.1, unit: "mg" },
+                        "Phosphore": { value: 253, unit: "mg" },
+                        "Sélénium": { value: 9.8, unit: "µg" }
+                    }
+                },
+                "Bœuf haché (15% MG)": {
+                    calories: 250,
+                    protein: 26.1,
+                    carbs: 0.0,
+                    fat: 15.0,
+                    micro: {
+                        "Fer": { value: 2.7, unit: "mg" },
+                        "Zinc": { value: 6.0, unit: "mg" },
+                        "Vitamine B12": { value: 2.3, unit: "µg" },
+                        "Niacine": { value: 5.4, unit: "mg" },
+                        "Vitamine B6": { value: 0.4, unit: "mg" }
+                    }
+                }
+            },
+            poissons: {
+                "Saumon": {
+                    calories: 208,
+                    protein: 20.0,
+                    carbs: 0.0,
+                    fat: 13.0,
+                    micro: {
+                        "Vitamine D": { value: 11.0, unit: "µg" },
+                        "Vitamine B12": { value: 2.6, unit: "µg" },
+                        "Oméga-3": { value: 2.3, unit: "g" },
+                        "Sélénium": { value: 36.5, unit: "µg" },
+                        "Potassium": { value: 363, unit: "mg" }
+                    }
+                },
+                "Thon": {
+                    calories: 144,
+                    protein: 30.0,
+                    carbs: 0.0,
+                    fat: 1.0,
+                    micro: {
+                        "Vitamine B12": { value: 2.5, unit: "µg" },
+                        "Niacine": { value: 11.3, unit: "mg" },
+                        "Sélénium": { value: 65.7, unit: "µg" },
+                        "Potassium": { value: 441, unit: "mg" },
+                        "Phosphore": { value: 267, unit: "mg" }
+                    }
+                },
+                "Cabillaud": {
+                    calories: 82,
+                    protein: 18.0,
+                    carbs: 0.0,
+                    fat: 0.7,
+                    micro: {
+                        "Vitamine B12": { value: 1.0, unit: "µg" },
+                        "Vitamine B6": { value: 0.3, unit: "mg" },
+                        "Phosphore": { value: 203, unit: "mg" },
+                        "Sélénium": { value: 33.1, unit: "µg" },
+                        "Potassium": { value: 321, unit: "mg" }
+                    }
+                },
+                "Sardine": {
+                    calories: 208,
+                    protein: 24.6,
+                    carbs: 0.0,
+                    fat: 11.5,
+                    micro: {
+                        "Vitamine D": { value: 4.8, unit: "µg" },
+                        "Calcium": { value: 382, unit: "mg" },
+                        "Vitamine B12": { value: 8.9, unit: "µg" },
+                        "Fer": { value: 2.9, unit: "mg" },
+                        "Oméga-3": { value: 1.4, unit: "g" }
+                    }
+                },
+                "Truite": {
+                    calories: 141,
+                    protein: 19.9,
+                    carbs: 0.0,
+                    fat: 6.2,
+                    micro: {
+                        "Vitamine B12": { value: 3.5, unit: "µg" },
+                        "Niacine": { value: 5.4, unit: "mg" },
+                        "Potassium": { value: 375, unit: "mg" },
+                        "Phosphore": { value: 226, unit: "mg" },
+                        "Vitamine D": { value: 7.5, unit: "µg" }
+                    }
+                },
+                "Crevettes": {
+                    calories: 99,
+                    protein: 24.0,
+                    carbs: 0.0,
+                    fat: 0.3,
+                    micro: {
+                        "Sélénium": { value: 38.0, unit: "µg" },
+                        "Vitamine B12": { value: 1.7, unit: "µg" },
+                        "Fer": { value: 2.6, unit: "mg" },
+                        "Zinc": { value: 1.5, unit: "mg" },
+                        "Cuivre": { value: 0.2, unit: "mg" }
+                    }
+                },
+                "Maquereau": {
+                    calories: 205,
+                    protein: 19.0,
+                    carbs: 0.0,
+                    fat: 14.0,
+                    micro: {
+                        "Vitamine D": { value: 16.1, unit: "µg" },
+                        "Vitamine B12": { value: 7.8, unit: "µg" },
+                        "Oméga-3": { value: 2.6, unit: "g" },
+                        "Magnésium": { value: 97, unit: "mg" },
+                        "Potassium": { value: 314, unit: "mg" }
+                    }
+                },
+                "Bar (loup de mer)": {
+                    calories: 124,
+                    protein: 24.0,
+                    carbs: 0.0,
+                    fat: 2.5,
+                    micro: {
+                        "Vitamine B12": { value: 3.6, unit: "µg" },
+                        "Potassium": { value: 256, unit: "mg" },
+                        "Phosphore": { value: 201, unit: "mg" },
+                        "Sélénium": { value: 36.5, unit: "µg" },
+                        "Magnésium": { value: 31, unit: "mg" }
+                    }
+                },
+                "Dorade": {
+                    calories: 128,
+                    protein: 21.6,
+                    carbs: 0.0,
+                    fat: 4.0,
+                    micro: {
+                        "Vitamine B12": { value: 1.9, unit: "µg" },
+                        "Phosphore": { value: 254, unit: "mg" },
+                        "Sélénium": { value: 32.7, unit: "µg" },
+                        "Potassium": { value: 328, unit: "mg" },
+                        "Vitamine D": { value: 1.7, unit: "µg" }
+                    }
+                }
+            },
+            produits_laitiers: {
+                "Yaourt nature": {
+                    calories: 59,
+                    protein: 3.6,
+                    carbs: 4.7,
+                    fat: 3.2,
+                    micro: {
+                        "Calcium": { value: 121, unit: "mg" },
+                        "Phosphore": { value: 95, unit: "mg" },
+                        "Vitamine B12": { value: 0.4, unit: "µg" },
+                        "Riboflavine": { value: 0.2, unit: "mg" },
+                        "Probiotiques": { value: 10000000, unit: "UFC" }
+                    }
+                },
+                "Fromage blanc 0%": {
+                    calories: 56,
+                    protein: 10.0,
+                    carbs: 3.0,
+                    fat: 0.0,
+                    micro: {
+                        "Calcium": { value: 120, unit: "mg" },
+                        "Phosphore": { value: 153, unit: "mg" },
+                        "Vitamine B12": { value: 0.3, unit: "µg" },
+                        "Potassium": { value: 133, unit: "mg" },
+                        "Zinc": { value: 0.5, unit: "mg" }
+                    }
+                },
+                "Lait demi-écrémé": {
+                    calories: 47,
+                    protein: 3.3,
+                    carbs: 4.8,
+                    fat: 1.6,
+                    micro: {
+                        "Calcium": { value: 120, unit: "mg" },
+                        "Phosphore": { value: 95, unit: "mg" },
+                        "Vitamine B12": { value: 0.4, unit: "µg" },
+                        "Riboflavine": { value: 0.2, unit: "mg" },
+                        "Vitamine D": { value: 0.1, unit: "µg" }
+                    }
+                },
+                "Fromage de chèvre": {
+                    calories: 364,
+                    protein: 21.6,
+                    carbs: 2.5,
+                    fat: 29.8,
+                    micro: {
+                        "Calcium": { value: 298, unit: "mg" },
+                        "Phosphore": { value: 236, unit: "mg" },
+                        "Vitamine A": { value: 378, unit: "µg" },
+                        "Vitamine K": { value: 3.1, unit: "µg" },
+                        "Riboflavine": { value: 0.5, unit: "mg" }
+                    }
+                },
+                "Yaourt grec": {
+                    calories: 97,
+                    protein: 9.0,
+                    carbs: 3.6,
+                    fat: 5.0,
+                    micro: {
+                        "Calcium": { value: 115, unit: "mg" },
+                        "Phosphore": { value: 135, unit: "mg" },
+                        "Vitamine B12": { value: 0.5, unit: "µg" },
+                        "Sélénium": { value: 9.7, unit: "µg" },
+                        "Zinc": { value: 0.7, unit: "mg" }
+                    }
+                },
+                "Skyr": {
+                    calories: 63,
+                    protein: 11.0,
+                    carbs: 4.0,
+                    fat: 0.2,
+                    micro: {
+                        "Calcium": { value: 120, unit: "mg" },
+                        "Phosphore": { value: 110, unit: "mg" },
+                        "Vitamine B12": { value: 0.9, unit: "µg" },
+                        "Riboflavine": { value: 0.3, unit: "mg" },
+                        "Potassium": { value: 140, unit: "mg" }
+                    }
+                },
+                "Cottage cheese": {
+                    calories: 98,
+                    protein: 11.0,
+                    carbs: 3.1,
+                    fat: 4.3,
+                    micro: {
+                        "Calcium": { value: 83, unit: "mg" },
+                        "Phosphore": { value: 151, unit: "mg" },
+                        "Sélénium": { value: 6.8, unit: "µg" },
+                        "Vitamine B12": { value: 0.5, unit: "µg" },
+                        "Zinc": { value: 0.4, unit: "mg" }
+                    }
+                }
+            },
+            cereales: {
+                "Pain complet": {
+                    calories: 247,
+                    protein: 10.0,
+                    carbs: 41.0,
+                    fat: 3.3,
+                    micro: {
+                        "Fibres": { value: 7.0, unit: "g" },
+                        "Magnésium": { value: 90, unit: "mg" },
+                        "Sélénium": { value: 35.0, unit: "µg" },
+                        "Niacine": { value: 5.0, unit: "mg" },
+                        "Fer": { value: 2.5, unit: "mg" }
+                    }
+                },
+                "Flocons d'avoine": {
+                    calories: 375,
+                    protein: 13.0,
+                    carbs: 67.5,
+                    fat: 7.0,
+                    micro: {
+                        "Fibres": { value: 10.0, unit: "g" },
+                        "Manganèse": { value: 4.9, unit: "mg" },
+                        "Phosphore": { value: 523, unit: "mg" },
+                        "Magnésium": { value: 177, unit: "mg" },
+                        "Zinc": { value: 4.0, unit: "mg" }
+                    }
+                },
+                "Granola": {
+                    calories: 471,
+                    protein: 10.0,
+                    carbs: 64.0,
+                    fat: 20.0,
+                    micro: {
+                        "Fibres": { value: 7.0, unit: "g" },
+                        "Fer": { value: 4.0, unit: "mg" },
+                        "Magnésium": { value: 120, unit: "mg" },
+                        "Zinc": { value: 3.7, unit: "mg" },
+                        "Manganèse": { value: 3.0, unit: "mg" }
+                    }
+                },
+                "Muesli": {
+                    calories: 378,
+                    protein: 9.0,
+                    carbs: 68.0,
+                    fat: 8.0,
+                    micro: {
+                        "Fibres": { value: 8.5, unit: "g" },
+                        "Fer": { value: 3.0, unit: "mg" },
+                        "Magnésium": { value: 110, unit: "mg" },
+                        "Phosphore": { value: 306, unit: "mg" },
+                        "Zinc": { value: 2.1, unit: "mg" }
+                    }
+                },
+                "Pain aux céréales": {
+                    calories: 265,
+                    protein: 11.0,
+                    carbs: 43.0,
+                    fat: 5.0,
+                    micro: {
+                        "Fibres": { value: 8.0, unit: "g" },
+                        "Magnésium": { value: 68, unit: "mg" },
+                        "Fer": { value: 2.8, unit: "mg" },
+                        "Zinc": { value: 2.0, unit: "mg" },
+                        "Vitamine E": { value: 1.0, unit: "mg" }
+                    }
+                },
+                "Pain de seigle": {
+                    calories: 259,
+                    protein: 8.5,
+                    carbs: 48.0,
+                    fat: 3.0,
+                    micro: {
+                        "Fibres": { value: 8.0, unit: "g" },
+                        "Manganèse": { value: 1.9, unit: "mg" },
+                        "Phosphore": { value: 208, unit: "mg" },
+                        "Magnésium": { value: 40, unit: "mg" },
+                        "Zinc": { value: 1.8, unit: "mg" }
+                    }
+                },
+                "Riz brun": {
+                    calories: 111,
+                    protein: 2.6,
+                    carbs: 23.0,
+                    fat: 0.9,
+                    micro: {
+                        "Magnésium": { value: 43, unit: "mg" },
+                        "Phosphore": { value: 83, unit: "mg" },
+                        "Manganèse": { value: 1.1, unit: "mg" },
+                        "Sélénium": { value: 19.1, unit: "µg" },
+                        "Fibres": { value: 1.8, unit: "g" }
+                    }
+                }
+            },
+            petit_dejeuner: {
+                "Œuf (entier)": {
+                    calories: 143,
+                    protein: 12.6,
+                    carbs: 0.7,
+                    fat: 9.5,
+                    micro: {
+                        "Vitamine B12": { value: 0.9, unit: "µg" },
+                        "Vitamine A": { value: 149, unit: "µg" },
+                        "Sélénium": { value: 31.7, unit: "µg" },
+                        "Lutéine": { value: 292, unit: "µg" },
+                        "Choline": { value: 294, unit: "mg" }
+                    }
+                },
+                "Bacon": {
+                    calories: 417,
+                    protein: 37.0,
+                    carbs: 1.4,
+                    fat: 33.0,
+                    micro: {
+                        "Niacine": { value: 12.0, unit: "mg" },
+                        "Vitamine B12": { value: 0.7, unit: "µg" },
+                        "Fer": { value: 0.9, unit: "mg" },
+                        "Zinc": { value: 2.5, unit: "mg" },
+                        "Phosphore": { value: 198, unit: "mg" }
+                    }
+                },
+                "Avocat": {
+                    calories: 160,
+                    protein: 2.0,
+                    carbs: 8.5,
+                    fat: 14.7,
+                    micro: {
+                        "Vitamine K": { value: 21.0, unit: "µg" },
+                        "Folate": { value: 81, unit: "µg" },
+                        "Vitamine C": { value: 10, unit: "mg" },
+                        "Potassium": { value: 485, unit: "mg" },
+                        "Vitamine B5": { value: 1.4, unit: "mg" }
+                    }
+                },
+                "Miel": {
+                    calories: 304,
+                    protein: 0.3,
+                    carbs: 82.4,
+                    fat: 0.0,
+                    micro: {
+                        "Niacine": { value: 0.1, unit: "mg" },
+                        "Riboflavine": { value: 0.04, unit: "mg" },
+                        "Potassium": { value: 52, unit: "mg" },
+                        "Zinc": { value: 0.2, unit: "mg" },
+                        "Fer": { value: 0.4, unit: "mg" }
+                    }
+                },
+                "Confiture de fraises": {
+                    calories: 250,
+                    protein: 0.4,
+                    carbs: 65.0,
+                    fat: 0.0,
+                    micro: {
+                        "Vitamine C": { value: 4.0, unit: "mg" },
+                        "Calcium": { value: 8.0, unit: "mg" },
+                        "Potassium": { value: 37, unit: "mg" },
+                        "Magnésium": { value: 3.0, unit: "mg" },
+                        "Fer": { value: 0.2, unit: "mg" }
+                    }
+                },
+                "Beurre d'amande": {
+                    calories: 614,
+                    protein: 21.0,
+                    carbs: 19.0,
+                    fat: 55.0,
+                    micro: {
+                        "Vitamine E": { value: 24.0, unit: "mg" },
+                        "Magnésium": { value: 270, unit: "mg" },
+                        "Calcium": { value: 347, unit: "mg" },
+                        "Fer": { value: 3.7, unit: "mg" },
+                        "Zinc": { value: 3.3, unit: "mg" }
+                    }
+                },
+                "Beurre de cacahuète": {
+                    calories: 588,
+                    protein: 25.0,
+                    carbs: 20.0,
+                    fat: 50.0,
+                    micro: {
+                        "Niacine": { value: 13.0, unit: "mg" },
+                        "Magnésium": { value: 170, unit: "mg" },
+                        "Phosphore": { value: 335, unit: "mg" },
+                        "Zinc": { value: 2.8, unit: "mg" },
+                        "Vitamine E": { value: 8.3, unit: "mg" }
+                    }
+                }
+            },
+            boissons: {
+                "Café": {
+                    calories: 2,
+                    protein: 0.1,
+                    carbs: 0.0,
+                    fat: 0.0,
+                    micro: {
+                        "Niacine": { value: 0.5, unit: "mg" },
+                        "Magnésium": { value: 7.1, unit: "mg" },
+                        "Potassium": { value: 116, unit: "mg" },
+                        "Manganèse": { value: 0.05, unit: "mg" },
+                        "Antioxydants": { value: 1000, unit: "ORAC" }
+                    }
+                },
+                "Thé": {
+                    calories: 1,
+                    protein: 0.0,
+                    carbs: 0.2,
+                    fat: 0.0,
+                    micro: {
+                        "Manganèse": { value: 0.5, unit: "mg" },
+                        "Fluorure": { value: 0.3, unit: "mg" },
+                        "Potassium": { value: 88, unit: "mg" },
+                        "Antioxydants": { value: 1200, unit: "ORAC" },
+                        "Théine": { value: 25, unit: "mg" }
+                    }
+                },
+                "Jus d'orange": {
+                    calories: 45,
+                    protein: 0.7,
+                    carbs: 10.4,
+                    fat: 0.2,
+                    micro: {
+                        "Vitamine C": { value: 36.4, unit: "mg" },
+                        "Folate": { value: 27.3, unit: "µg" },
+                        "Potassium": { value: 200, unit: "mg" },
+                        "Thiamine": { value: 0.1, unit: "mg" },
+                        "Vitamine A": { value: 25, unit: "µg" }
+                    }
+                },
+                "Jus de pomme": {
+                    calories: 47,
+                    protein: 0.1,
+                    carbs: 11.3,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine C": { value: 2.2, unit: "mg" },
+                        "Potassium": { value: 120, unit: "mg" },
+                        "Magnésium": { value: 7, unit: "mg" },
+                        "Calcium": { value: 8, unit: "mg" },
+                        "Antioxydants": { value: 800, unit: "ORAC" }
+                    }
+                },
+                "Jus d'ananas": {
+                    calories: 50,
+                    protein: 0.5,
+                    carbs: 12.0,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine C": { value: 25.8, unit: "mg" },
+                        "Vitamine B6": { value: 0.1, unit: "mg" },
+                        "Magnésium": { value: 15, unit: "mg" },
+                        "Potassium": { value: 180, unit: "mg" },
+                        "Manganèse": { value: 1.0, unit: "mg" }
+                    }
+                },
+                "Jus de raisin": {
+                    calories: 60,
+                    protein: 0.5,
+                    carbs: 15.0,
+                    fat: 0.0,
+                    micro: {
+                        "Vitamine C": { value: 1.0, unit: "mg" },
+                        "Potassium": { value: 144, unit: "mg" },
+                        "Manganèse": { value: 0.12, unit: "mg" },
+                        "Antioxydants": { value: 1600, unit: "ORAC" },
+                        "Calcium": { value: 15, unit: "mg" }
+                    }
+                },
+                "Jus de tomate": {
+                    calories: 17,
+                    protein: 0.8,
+                    carbs: 4.0,
+                    fat: 0.1,
+                    micro: {
+                        "Vitamine C": { value: 18.3, unit: "mg" },
+                        "Vitamine A": { value: 56, unit: "µg" },
+                        "Potassium": { value: 217, unit: "mg" },
+                        "Lycopène": { value: 3100, unit: "µg" },
+                        "Folate": { value: 9, unit: "µg" }
+                    }
+                },
+                "Jus de carotte": {
+                    calories: 39,
+                    protein: 0.9,
+                    carbs: 9.3,
+                    fat: 0.2,
+                    micro: {
+                        "Vitamine A": { value: 900, unit: "µg" },
+                        "Vitamine K": { value: 20.2, unit: "µg" },
+                        "Potassium": { value: 292, unit: "mg" },
+                        "Vitamine C": { value: 9.1, unit: "mg" },
+                        "Calcium": { value: 30, unit: "mg" }
+                    }
+                }
+            }
+        };
+
+        // Structure des repas
+        const meals = {
+            breakfast: { name: "Petit-déjeuner", items: [], icon: "coffee" },
+            lunch: { name: "Déjeuner", items: [], icon: "utensils" },
+            dinner: { name: "Dîner", items: [], icon: "utensils" },
+            snack: { name: "Collation", items: [], icon: "apple-alt" }
+        };
+
+        // Repas actif
+        let activeMeal = "breakfast";
+        
+        // Variables globales pour les modales
+        let currentEditId = null;
+        let currentEditMeal = null;
+
+        // Graphiques
+        let macroChart = null;
+        let dailyMacroChart = null;
+        let mealsChart = null;
+
+        // Récupération des éléments DOM
+        const mealTabs = document.querySelectorAll('.meal-tab');
+        const currentMealTitle = document.getElementById('current-meal-title');
+        const currentMealDisplay = document.getElementById('current-meal-display');
+        const categorySelect = document.getElementById('food-category');
+        const foodSelect = document.getElementById('food-item');
+        const quantityInput = document.getElementById('food-quantity');
+        const addFoodBtn = document.getElementById('add-food-btn');
+        const foodDetailsContent = document.getElementById('food-details-content');
+        const mealList = document.getElementById('meal-items');
+        const emptyMealMessage = document.getElementById('empty-meal-message');
+        const totalCalories = document.getElementById('total-calories');
+        const totalWeight = document.getElementById('total-weight');
+        const totalProtein = document.getElementById('total-protein');
+        const totalCarbs = document.getElementById('total-carbs');
+        const totalFat = document.getElementById('total-fat');
+        const proteinBar = document.getElementById('protein-bar');
+        const carbsBar = document.getElementById('carbs-bar');
+        const fatBar = document.getElementById('fat-bar');
+        const micronutrientsContainer = document.getElementById('micronutrients-container');
+        const emptyMicroMessage = document.getElementById('empty-micro-message');
+        const resetAllBtn = document.getElementById('reset-all-btn');
+        const infoBtn = document.getElementById('info-btn');
+        const infoModal = document.getElementById('info-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const closeModalX = document.getElementById('close-modal');
+        const addToHomeBtn = document.getElementById('add-to-home-btn');
+        const editModal = document.getElementById('edit-modal');
+        const editQuantity = document.getElementById('edit-quantity');
+        const confirmEditBtn = document.getElementById('confirm-edit-btn');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const closeEditModalX = document.getElementById('close-edit-modal');
+        const exportPdfBtn = document.getElementById('export-pdf-btn');
+
+        // Écouteurs d'événements
+        mealTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Mettre à jour le repas actif
+                activeMeal = tab.dataset.meal;
+                
+                // Mettre à jour l'apparence des onglets
+                mealTabs.forEach(t => {
+                    if (t.dataset.meal === activeMeal) {
+                        t.classList.add('active');
+                        t.classList.remove('bg-gray-200');
+                    } else {
+                        t.classList.remove('active');
+                        t.classList.add('bg-gray-200');
+                    }
+                });
+                
+                // Mettre à jour les titres
+                currentMealTitle.textContent = `Ajouter un aliment au ${meals[activeMeal].name.toLowerCase()}`;
+                currentMealDisplay.textContent = `Mon ${meals[activeMeal].name.toLowerCase()}`;
+                
+                // Actualiser l'affichage du repas
+                updateMealList();
+                updateNutritionSummary();
+            });
+        });
+        
+        categorySelect.addEventListener('change', updateFoodItems);
+        foodSelect.addEventListener('change', updateFoodDetails);
+        quantityInput.addEventListener('input', updateFoodDetails);
+        addFoodBtn.addEventListener('click', addFoodToMeal);
+        resetAllBtn.addEventListener('click', resetAllMeals);
+        
+        // Événements de la modale d'information
+        infoBtn.addEventListener('click', () => infoModal.style.display = 'block');
+        closeModalBtn.addEventListener('click', () => infoModal.style.display = 'none');
+        closeModalX.addEventListener('click', () => infoModal.style.display = 'none');
+        window.addEventListener('click', (e) => {
+            if (e.target === infoModal) infoModal.style.display = 'none';
+            if (e.target === editModal) editModal.style.display = 'none';
+        });
+        
+        // Événements de la modale d'édition
+        confirmEditBtn.addEventListener('click', confirmEdit);
+        cancelEditBtn.addEventListener('click', () => editModal.style.display = 'none');
+        closeEditModalX.addEventListener('click', () => editModal.style.display = 'none');
+        
+        // Événement d'ajout à l'accueil
+        addToHomeBtn.addEventListener('click', addToHome);
+        
+        // Événement d'exportation PDF
+        exportPdfBtn.addEventListener('click', exportToPDF);
+
+        // Initialisation des graphiques
+        initCharts();
+
+        // Fonctions
+        function updateFoodItems() {
+            const category = categorySelect.value;
+            foodSelect.innerHTML = '';
+            
+            if (category) {
+                foodSelect.disabled = false;
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Sélectionnez un aliment';
+                foodSelect.appendChild(defaultOption);
+                
+                for (const foodName in foodDatabase[category]) {
+                    const option = document.createElement('option');
+                    option.value = foodName;
+                    option.textContent = foodName;
+                    foodSelect.appendChild(option);
+                }
+            } else {
+                foodSelect.disabled = true;
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = "Sélectionnez d'abord une catégorie";
+                foodSelect.appendChild(defaultOption);
+            }
+            
+            updateFoodDetails();
+        }
+
+        function updateFoodDetails() {
+            const category = categorySelect.value;
+            const foodName = foodSelect.value;
+            const quantity = parseInt(quantityInput.value) || 0;
+            
+            if (category && foodName && foodDatabase[category][foodName]) {
+                const food = foodDatabase[category][foodName];
+                const caloriesForQuantity = (food.calories * quantity / 100).toFixed(1);
+                const proteinForQuantity = (food.protein * quantity / 100).toFixed(1);
+                const carbsForQuantity = (food.carbs * quantity / 100).toFixed(1);
+                const fatForQuantity = (food.fat * quantity / 100).toFixed(1);
+                
+                let detailsHTML = `
+                    <div class="mb-3">
+                        <p class="font-medium text-gray-700">Pour ${quantity}g de ${foodName}:</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <div class="bg-gray-100 p-2 rounded">
+                            <p class="text-sm text-gray-600">Calories</p>
+                            <p class="font-bold">${caloriesForQuantity} kcal</p>
+                        </div>
+                        <div class="bg-blue-100 p-2 rounded">
+                            <p class="text-sm text-gray-600">Protéines</p>
+                            <p class="font-bold">${proteinForQuantity} g</p>
+                        </div>
+                        <div class="bg-green-100 p-2 rounded">
+                            <p class="text-sm text-gray-600">Glucides</p>
+                            <p class="font-bold">${carbsForQuantity} g</p>
+                        </div>
+                        <div class="bg-orange-100 p-2 rounded">
+                            <p class="text-sm text-gray-600">Lipides</p>
+                            <p class="font-bold">${fatForQuantity} g</p>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-700 mb-2">Micronutriments:</p>
+                        <ul class="text-sm">
+                `;
+                
+                for (const [nutrient, details] of Object.entries(food.micro)) {
+                    const valueForQuantity = (details.value * quantity / 100).toFixed(1);
+                    detailsHTML += `<li class="mb-1">${nutrient}: ${valueForQuantity} ${details.unit}</li>`;
+                }
+                
+                detailsHTML += `
+                        </ul>
+                    </div>
+                `;
+                
+                foodDetailsContent.innerHTML = detailsHTML;
+                addFoodBtn.disabled = false;
+            } else {
+                foodDetailsContent.innerHTML = "Sélectionnez un aliment pour voir ses détails nutritionnels";
+                addFoodBtn.disabled = true;
+            }
+        }
+
+        function addFoodToMeal() {
+            const category = categorySelect.value;
+            const foodName = foodSelect.value;
+            const quantity = parseInt(quantityInput.value) || 0;
+            
+            if (category && foodName && quantity > 0) {
+                const food = foodDatabase[category][foodName];
+                
+                // Créer un nouvel élément de repas
+                const mealItem = {
+                    id: Date.now(), // ID unique pour l'élément
+                    category: category,
+                    name: foodName,
+                    quantity: quantity,
+                    calories: food.calories * quantity / 100,
+                    protein: food.protein * quantity / 100,
+                    carbs: food.carbs * quantity / 100,
+                    fat: food.fat * quantity / 100,
+                    micro: {}
+                };
+                
+                // Copier les micronutriments avec les valeurs ajustées
+                for (const [nutrient, details] of Object.entries(food.micro)) {
+                    mealItem.micro[nutrient] = {
+                        value: details.value * quantity / 100,
+                        unit: details.unit
+                    };
+                }
+                
+                // Ajouter au tableau des éléments du repas actif
+                meals[activeMeal].items.push(mealItem);
+                
+                // Mettre à jour l'affichage
+                updateMealList();
+                updateNutritionSummary();
+                updateDailySummary();
+                
+                // Réinitialiser les sélections
+                foodSelect.value = '';
+                quantityInput.value = '100';
+                updateFoodDetails();
+            }
+        }
+
+        function updateMealList() {
+            const currentMealItems = meals[activeMeal].items;
+            
+            if (currentMealItems.length > 0) {
+                emptyMealMessage.style.display = 'none';
+                
+                let mealHTML = '';
+                currentMealItems.forEach(item => {
+                    mealHTML += `
+                        <li class="py-3">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <span class="font-medium">${item.name}</span>
+                                    <span class="text-sm text-gray-600 ml-2">(${item.quantity}g)</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <span class="text-sm mr-3">${item.calories.toFixed(1)} kcal</span>
+                                    <button class="text-blue-500 hover:text-blue-700 mr-2 no-print" onclick="editItemQuantity('${activeMeal}', ${item.id})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="text-red-500 hover:text-red-700 no-print" onclick="removeFromMeal('${activeMeal}', ${item.id})">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mt-1">
+                                <span class="text-xs text-blue-600 mr-2">P: ${item.protein.toFixed(1)}g</span>
+                                <span class="text-xs text-green-600 mr-2">G: ${item.carbs.toFixed(1)}g</span>
+                                <span class="text-xs text-orange-600">L: ${item.fat.toFixed(1)}g</span>
+                            </div>
+                        </li>
+                    `;
+                });
+                
+                mealList.innerHTML = mealHTML;
+            } else {
+                emptyMealMessage.style.display = 'block';
+                mealList.innerHTML = '';
+            }
+        }
+
+        function updateNutritionSummary() {
+            const currentMealItems = meals[activeMeal].items;
+            
+            if (currentMealItems.length === 0) {
+                totalCalories.textContent = '0 kcal';
+                totalWeight.textContent = '0 g';
+                totalProtein.textContent = '0g (0%)';
+                totalCarbs.textContent = '0g (0%)';
+                totalFat.textContent = '0g (0%)';
+                
+                proteinBar.style.width = '0%';
+                carbsBar.style.width = '0%';
+                fatBar.style.width = '0%';
+                
+                emptyMicroMessage.style.display = 'block';
+                micronutrientsContainer.innerHTML = '';
+                
+                updateChart(0, 0, 0);
+                return;
+            }
+            
+            // Calculer les totaux pour le repas actif
+            let totalCal = 0;
+            let totalP = 0;
+            let totalC = 0;
+            let totalF = 0;
+            let totalW = 0;
+            let microTotals = {};
+            
+            currentMealItems.forEach(item => {
+                totalCal += item.calories;
+                totalP += item.protein;
+                totalC += item.carbs;
+                totalF += item.fat;
+                totalW += item.quantity;
+                
+                // Additionner les micronutriments
+                for (const [nutrient, details] of Object.entries(item.micro)) {
+                    if (!microTotals[nutrient]) {
+                        microTotals[nutrient] = {
+                            value: 0,
+                            unit: details.unit
+                        };
+                    }
+                    microTotals[nutrient].value += details.value;
+                }
+            });
+            
+            // Calculer les pourcentages de macronutriments (calories)
+            const proteinCal = totalP * 4;
+            const carbsCal = totalC * 4;
+            const fatCal = totalF * 9;
+            const totalMacroCal = proteinCal + carbsCal + fatCal;
+            
+            const proteinPerc = totalMacroCal > 0 ? (proteinCal / totalMacroCal * 100).toFixed(1) : 0;
+            const carbsPerc = totalMacroCal > 0 ? (carbsCal / totalMacroCal * 100).toFixed(1) : 0;
+            const fatPerc = totalMacroCal > 0 ? (fatCal / totalMacroCal * 100).toFixed(1) : 0;
+            
+            // Mettre à jour l'affichage
+            totalCalories.textContent = `${totalCal.toFixed(1)} kcal`;
+            totalWeight.textContent = `${totalW} g`;
+            totalProtein.textContent = `${totalP.toFixed(1)}g (${proteinPerc}%)`;
+            totalCarbs.textContent = `${totalC.toFixed(1)}g (${carbsPerc}%)`;
+            totalFat.textContent = `${totalF.toFixed(1)}g (${fatPerc}%)`;
+            
+            proteinBar.style.width = `${proteinPerc}%`;
+            carbsBar.style.width = `${carbsPerc}%`;
+            fatBar.style.width = `${fatPerc}%`;
+            
+            // Mettre à jour le graphique
+            updateChart(proteinCal, carbsCal, fatCal);
+            
+            // Afficher les micronutriments
+            if (Object.keys(microTotals).length > 0) {
+                emptyMicroMessage.style.display = 'none';
+                
+                let microHTML = '<div class="grid grid-cols-1 md:grid-cols-2 gap-2">';
+                
+                for (const [nutrient, details] of Object.entries(microTotals)) {
+                    microHTML += `
+                        <div class="mb-2">
+                            <div class="flex justify-between text-sm">
+                                <span>${nutrient}</span>
+                                <span>${details.value.toFixed(1)} ${details.unit}</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                <div class="bg-purple-500 h-1.5 rounded-full" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                microHTML += '</div>';
+                micronutrientsContainer.innerHTML = microHTML;
+            } else {
+                emptyMicroMessage.style.display = 'block';
+                micronutrientsContainer.innerHTML = '';
+            }
+        }
+
+        function updateDailySummary() {
+            // Calculer les totaux pour tous les repas
+            let totalCal = 0;
+            let totalP = 0;
+            let totalC = 0;
+            let totalF = 0;
+            let mealCalories = {};
+            
+            // Calculer les totaux pour chaque repas
+            for (const [mealKey, meal] of Object.entries(meals)) {
+                let mealCal = 0;
+                let mealP = 0;
+                let mealC = 0;
+                let mealF = 0;
+                
+                meal.items.forEach(item => {
+                    mealCal += item.calories;
+                    mealP += item.protein;
+                    mealC += item.carbs;
+                    mealF += item.fat;
+                });
+                
+                // Mettre à jour les champs du tableau récapitulatif
+                document.getElementById(`${mealKey}-calories`).textContent = `${mealCal.toFixed(1)} kcal`;
+                document.getElementById(`${mealKey}-protein`).textContent = `${mealP.toFixed(1)} g`;
+                document.getElementById(`${mealKey}-carbs`).textContent = `${mealC.toFixed(1)} g`;
+                document.getElementById(`${mealKey}-fat`).textContent = `${mealF.toFixed(1)} g`;
+                
+                // Cumuler pour le total journalier
+                totalCal += mealCal;
+                totalP += mealP;
+                totalC += mealC;
+                totalF += mealF;
+                
+                // Stocker pour le graphique
+                mealCalories[meal.name] = mealCal;
+            }
+            
+            // Mettre à jour les totaux journaliers
+            document.getElementById('daily-calories').textContent = `${totalCal.toFixed(1)} kcal`;
+            document.getElementById('daily-protein').textContent = `${totalP.toFixed(1)} g`;
+            document.getElementById('daily-carbs').textContent = `${totalC.toFixed(1)} g`;
+            document.getElementById('daily-fat').textContent = `${totalF.toFixed(1)} g`;
+            
+            // Dernière ligne du tableau
+            document.getElementById('total-daily-calories').textContent = `${totalCal.toFixed(1)} kcal`;
+            document.getElementById('total-daily-protein').textContent = `${totalP.toFixed(1)} g`;
+            document.getElementById('total-daily-carbs').textContent = `${totalC.toFixed(1)} g`;
+            document.getElementById('total-daily-fat').textContent = `${totalF.toFixed(1)} g`;
+            
+            // Calculer les proportions de macronutriments pour le graphique
+            const proteinCal = totalP * 4;
+            const carbsCal = totalC * 4;
+            const fatCal = totalF * 9;
+            
+            // Mettre à jour les graphiques
+            updateDailyMacroChart(proteinCal, carbsCal, fatCal);
+            updateMealsChart(mealCalories);
+        }
+
+        function initCharts() {
+            // Graphique des macronutriments du repas actif
+            const macroCtx = document.getElementById('macro-chart').getContext('2d');
+            macroChart = new Chart(macroCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Protéines', 'Glucides', 'Lipides'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#4299e1', '#48bb78', '#ed8936'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                    return `${label}: ${percentage}% (${value.toFixed(1)} kcal)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Graphique des macronutriments journaliers
+            const dailyMacroCtx = document.getElementById('daily-macro-chart').getContext('2d');
+            dailyMacroChart = new Chart(dailyMacroCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Protéines', 'Glucides', 'Lipides'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#4299e1', '#48bb78', '#ed8936'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                    return `${label}: ${percentage}% (${value.toFixed(1)} kcal)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Graphique de répartition par repas
+            const mealsCtx = document.getElementById('meals-chart').getContext('2d');
+            mealsChart = new Chart(mealsCtx, {
+                type: 'bar',
+                data: {
+                    labels: [
+                        'Petit-déjeuner',
+                        'Déjeuner',
+                        'Dîner',
+                        'Collation'
+                    ],
+                    datasets: [{
+                        label: 'Calories (kcal)',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(66, 153, 225, 0.7)',
+                            'rgba(72, 187, 120, 0.7)',
+                            'rgba(237, 137, 54, 0.7)',
+                            'rgba(159, 122, 234, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(66, 153, 225, 1)',
+                            'rgba(72, 187, 120, 1)',
+                            'rgba(237, 137, 54, 1)',
+                            'rgba(159, 122, 234, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Calories (kcal)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(protein, carbs, fat) {
+            macroChart.data.datasets[0].data = [protein, carbs, fat];
+            macroChart.update();
+        }
+
+        function updateDailyMacroChart(protein, carbs, fat) {
+            dailyMacroChart.data.datasets[0].data = [protein, carbs, fat];
+            dailyMacroChart.update();
+        }
+
+        function updateMealsChart(mealCalories) {
+            mealsChart.data.datasets[0].data = [
+                mealCalories['Petit-déjeuner'] || 0,
+                mealCalories['Déjeuner'] || 0,
+                mealCalories['Dîner'] || 0,
+                mealCalories['Collation'] || 0
+            ];
+            mealsChart.update();
+        }
+
+        function removeFromMeal(mealKey, id) {
+            meals[mealKey].items = meals[mealKey].items.filter(item => item.id !== id);
+            
+            if (mealKey === activeMeal) {
+                updateMealList();
+                updateNutritionSummary();
+            }
+            
+            updateDailySummary();
+        }
+        
+        function resetAllMeals() {
+            if (confirm('Voulez-vous vraiment réinitialiser tous les repas ? Cette action est irréversible.')) {
+                for (const mealKey in meals) {
+                    meals[mealKey].items = [];
+                }
+                
+                updateMealList();
+                updateNutritionSummary();
+                updateDailySummary();
+            }
+        }
+        
+        function editItemQuantity(mealKey, id) {
+            const item = meals[mealKey].items.find(item => item.id === id);
+            if (item) {
+                // Stocker les références pour validation
+                currentEditId = id;
+                currentEditMeal = mealKey;
+                
+                // Préremplir le champ avec la quantité actuelle
+                editQuantity.value = item.quantity;
+                
+                // Afficher le titre avec le nom de l'aliment
+                document.getElementById('edit-modal-title').textContent = `Modifier la quantité de ${item.name}`;
+                
+                // Afficher la modale
+                editModal.style.display = 'block';
+            }
+        }
+        
+        function confirmEdit() {
+            if (currentEditId && currentEditMeal) {
+                const newQuantity = parseInt(editQuantity.value) || 0;
+                
+                if (newQuantity > 0) {
+                    const itemIndex = meals[currentEditMeal].items.findIndex(item => item.id === currentEditId);
+                    
+                    if (itemIndex !== -1) {
+                        const item = meals[currentEditMeal].items[itemIndex];
+                        const food = foodDatabase[item.category][item.name];
+                        
+                        // Calculer les nouvelles valeurs
+                        const oldQuantity = item.quantity;
+                        const quantityRatio = newQuantity / oldQuantity;
+                        
+                        // Mettre à jour les valeurs
+                        item.quantity = newQuantity;
+                        item.calories = food.calories * newQuantity / 100;
+                        item.protein = food.protein * newQuantity / 100;
+                        item.carbs = food.carbs * newQuantity / 100;
+                        item.fat = food.fat * newQuantity / 100;
+                        
+                        // Mettre à jour les micronutriments
+                        for (const nutrient in item.micro) {
+                            item.micro[nutrient].value = food.micro[nutrient].value * newQuantity / 100;
+                        }
+                        
+                        // Mettre à jour l'affichage
+                        if (currentEditMeal === activeMeal) {
+                            updateMealList();
+                            updateNutritionSummary();
+                        }
+                        
+                        updateDailySummary();
+                    }
+                }
+                
+                // Fermer la modale et réinitialiser les valeurs
+                editModal.style.display = 'none';
+                currentEditId = null;
+                currentEditMeal = null;
+            }
+        }
+        
+        function addToHome() {
+            // Cette fonction simule l'ajout à l'écran d'accueil
+            alert('L\'application "Calcul Calorie - Tophe" a été ajoutée à votre écran d\'accueil');
+        }
+        
+        function exportToPDF() {
+            // Préparation du contenu pour PDF
+            const today = new Date();
+            const dateStr = today.toLocaleDateString('fr-FR', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            // Créer le conteneur pour le PDF
+            const pdfContent = document.createElement('div');
+            pdfContent.classList.add('pdf-container');
+            pdfContent.style.padding = '20px';
+            pdfContent.style.fontFamily = 'Arial, sans-serif';
+            
+            // Ajouter l'en-tête
+            const header = document.createElement('div');
+            header.innerHTML = `
+                <h1 style="text-align: center; color: #2c5282; margin-bottom: 10px;">Menu journalier - Détail nutritionnel</h1>
+                <p style="text-align: center; margin-bottom: 30px;">Date: ${dateStr}</p>
+            `;
+            pdfContent.appendChild(header);
+            
+            // Ajouter le résumé calorique
+            const caloriesSummary = document.createElement('div');
+            caloriesSummary.style.marginBottom = '30px';
+            caloriesSummary.style.padding = '15px';
+            caloriesSummary.style.backgroundColor = '#f0f9ff';
+            caloriesSummary.style.borderRadius = '8px';
+            
+            const totalCal = parseFloat(document.getElementById('daily-calories').textContent);
+            const totalProtein = parseFloat(document.getElementById('daily-protein').textContent);
+            const totalCarbs = parseFloat(document.getElementById('daily-carbs').textContent);
+            const totalFat = parseFloat(document.getElementById('daily-fat').textContent);
+            
+            caloriesSummary.innerHTML = `
+                <h2 style="color: #2c5282; margin-bottom: 15px;">Résumé nutritionnel</h2>
+                <div style="display: flex; flex-wrap: wrap; justify-content: space-between;">
+                    <div style="background-color: #e3f2fd; padding: 10px; border-radius: 6px; width: 48%; margin-bottom: 10px;">
+                        <p style="font-weight: bold; margin: 0;">Calories totales</p>
+                        <p style="font-size: 24px; margin: 5px 0 0 0;">${totalCal} kcal</p>
+                    </div>
+                    <div style="background-color: #e8f5e9; padding: 10px; border-radius: 6px; width: 48%; margin-bottom: 10px;">
+                        <p style="font-weight: bold; margin: 0;">Protéines</p>
+                        <p style="font-size: 24px; margin: 5px 0 0 0;">${totalProtein} g</p>
+                    </div>
+                    <div style="background-color: #fff3e0; padding: 10px; border-radius: 6px; width: 48%;">
+                        <p style="font-weight: bold; margin: 0;">Glucides</p>
+                        <p style="font-size: 24px; margin: 5px 0 0 0;">${totalCarbs} g</p>
+                    </div>
+                    <div style="background-color: #fbe9e7; padding: 10px; border-radius: 6px; width: 48%;">
+                        <p style="font-weight: bold; margin: 0;">Lipides</p>
+                        <p style="font-size: 24px; margin: 5px 0 0 0;">${totalFat} g</p>
+                    </div>
+                </div>
+            `;
+            pdfContent.appendChild(caloriesSummary);
+            
+            // Ajouter le détail de chaque repas
+            for (const [mealKey, meal] of Object.entries(meals)) {
+                const mealSection = document.createElement('div');
+                mealSection.style.marginBottom = '30px';
+                
+                let mealIconClass = '';
+                switch(mealKey) {
+                    case 'breakfast':
+                        mealIconClass = 'fas fa-coffee';
+                        break;
+                    case 'lunch':
+                    case 'dinner':
+                        mealIconClass = 'fas fa-utensils';
+                        break;
+                    case 'snack':
+                        mealIconClass = 'fas fa-apple-alt';
+                        break;
+                }
+                
+                let mealContent = `
+                    <h2 style="color: #2c5282; margin-bottom: 15px;">
+                        <i class="${mealIconClass}" style="margin-right: 8px;"></i>${meal.name}
+                    </h2>
+                `;
+                
+                if (meal.items.length === 0) {
+                    mealContent += `<p style="color: #718096; font-style: italic;">Aucun aliment enregistré pour ce repas</p>`;
+                } else {
+                    let totalMealCal = 0;
+                    let totalMealProt = 0;
+                    let totalMealCarbs = 0;
+                    let totalMealFat = 0;
+                    
+                    mealContent += `<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                        <tr style="background-color: #f8fafc; text-align: left;">
+                            <th style="padding: 10px; border-bottom: 1px solid #e2e8f0;">Aliment</th>
+                            <th style="padding: 10px; border-bottom: 1px solid #e2e8f0;">Quantité</th>
+                            <th style="padding: 10px; border-bottom: 1px solid #e2e8f0;">Calories</th>
+                            <th style="padding: 10px; border-bottom: 1px solid #e2e8f0;">P/G/L</th>
+                        </tr>`;
+                    
+                    meal.items.forEach(item => {
+                        totalMealCal += item.calories;
+                        totalMealProt += item.protein;
+                        totalMealCarbs += item.carbs;
+                        totalMealFat += item.fat;
+                        
+                        mealContent += `
+                            <tr style="border-bottom: 1px solid #e2e8f0;">
+                                <td style="padding: 10px;">${item.name}</td>
+                                <td style="padding: 10px;">${item.quantity}g</td>
+                                <td style="padding: 10px;">${item.calories.toFixed(1)} kcal</td>
+                                <td style="padding: 10px;">
+                                    <span style="color: #4299e1;">${item.protein.toFixed(1)}g</span> / 
+                                    <span style="color: #48bb78;">${item.carbs.toFixed(1)}g</span> / 
+                                    <span style="color: #ed8936;">${item.fat.toFixed(1)}g</span>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    mealContent += `
+                        <tr style="background-color: #ebf8ff; font-weight: bold;">
+                            <td style="padding: 10px;">Total</td>
+                            <td style="padding: 10px;"></td>
+                            <td style="padding: 10px;">${totalMealCal.toFixed(1)} kcal</td>
+                            <td style="padding: 10px;">
+                                <span style="color: #4299e1;">${totalMealProt.toFixed(1)}g</span> / 
+                                <span style="color: #48bb78;">${totalMealCarbs.toFixed(1)}g</span> / 
+                                <span style="color: #ed8936;">${totalMealFat.toFixed(1)}g</span>
+                            </td>
+                        </tr>
+                    </table>`;
+                }
+                
+                mealSection.innerHTML = mealContent;
+                pdfContent.appendChild(mealSection);
+            }
+            
+            // Ajouter note de bas de page
+            const footer = document.createElement('div');
+            footer.style.borderTop = '1px solid #e2e8f0';
+            footer.style.paddingTop = '15px';
+            footer.style.textAlign = 'center';
+            footer.style.color = '#718096';
+            footer.style.fontSize = '12px';
+            footer.innerHTML = `
+                <p>Application développée par Tophe - 2025</p>
+                <p style="margin-top: 5px;">Ces informations sont indicatives et ne remplacent pas les conseils personnalisés d'un professionnel de santé.</p>
+            `;
+            pdfContent.appendChild(footer);
+            
+            // Créer le PDF avec html2pdf
+            const opt = {
+                margin: 10,
+                filename: `Menu_Journalier_${today.toISOString().split('T')[0]}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            
+            html2pdf().set(opt).from(pdfContent).save();
+        }
+
+        // Exposer les fonctions nécessaires globalement
+        window.removeFromMeal = removeFromMeal;
+        window.editItemQuantity = editItemQuantity;
+    </script>
+</body>
+</html>
